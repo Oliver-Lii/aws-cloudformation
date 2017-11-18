@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS AMI Lookup Lambda Stack'
+Parameters: 
+  ModuleName: 
+    Description: Name of the javascript file
+    Default: amilookup-win  
+    Type: String
+  S3Bucket:
+    Description: Name of the S3 bucket containing the amilookup zip file
+    AllowedPattern: '^([a-z]|(\d(?!\d{0,2}\.\d{1,3}\.\d{1,3}\.\d{1,3})))([a-z\d]|(\.(?!(\.|-)))|(-(?!\.))){1,61}[a-z\d\.]$'    
+    Type: String
+  S3Key:
+    Description: Name and path of the amilookup zip file
+    Default:  lambda/amilookup-win.zip
+    Type: String
+Resources:
+    AMIInfoFunction:
+      Type: AWS::Lambda::Function
+      Properties:
+        FunctionName: !Sub "${AWS::StackName}-${AWS::Region}"
+        Code:
+          S3Bucket: !Ref S3Bucket
+          S3Key: !Ref S3Key
+        Handler: !Sub "${ModuleName}.handler"
+        Runtime: nodejs4.3
+        Timeout: 30
+        Role: !GetAtt AMIInfoLambdaExecutionRole.Arn
+    AMIInfoLambdaExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub "${AWS::StackName}-${AWS::Region}"
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+            - sts:AssumeRole
+        Path: "/"
+        Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource: arn:aws:logs:*:*:*
+            - Effect: Allow
+              Action:
+              - ec2:DescribeImages
+              Resource: "*"
+Outputs:
+  AMIInfoLambdaExecutionRoleName:
+    Description: The name of the Lambda Execution IAM Role
+    Value: !Ref AMIInfoLambdaExecutionRole
+    Export:
+      Name: !Sub "${AWS::StackName}-AMIInfoLambdaExecutionRoleName"
+  AMIInfoLambdaExecutionRoleArn:
+    Description: The Arn of the Lambda Execution IAM Role
+    Value: !GetAtt AMIInfoLambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AMIInfoLambdaExecutionRoleArn"
+  AMIInfoFunctionArn:
+    Description: The Arn of the Lambda function
+    Value: !GetAtt AMIInfoFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AMIInfoFunctionArn" 

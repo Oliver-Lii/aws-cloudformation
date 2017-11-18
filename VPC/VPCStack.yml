@@ -1,0 +1,479 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Deploys VPC network infrastructure'
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+    - Label:
+        default: 'VPC Parameters'
+      Parameters:
+      - AvailabilityZone1
+      - AvailabilityZone2
+      - AvailabilityZone3
+      - CidrBlock
+      - PrivateSubnetACIDR
+      - PrivateSubnetBCIDR
+      - PrivateSubnetCCIDR      
+      - PublicSubnetACIDR
+      - PublicSubnetBCIDR
+      - PublicSubnetCCIDR
+    - Label:
+        default: 'Management Parameters'
+      Parameters:
+      - ManagementCIDRIP
+      - ManagementAccessType
+    - Label:
+        default: 'DHCP Parameters'
+      Parameters:
+      - DHCPOptDomainName
+      - DHCPOptDNSServers
+      - DHCPOptNTPServers 
+Parameters:
+  CidrBlock:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    ConstraintDescription: Please supply a valid CIDR IP block
+    Description: VPC CIDR IP Block for the VPC (eg 10.0.0.0/16)
+    Type: String
+  AvailabilityZone1:
+    Description: The AvailabilityZone to use for the first subnet
+    Type: AWS::EC2::AvailabilityZone::Name
+  AvailabilityZone2:
+    Description: The AvailabilityZone to use for the second subnet
+    Type: AWS::EC2::AvailabilityZone::Name
+  AvailabilityZone3:
+    Description: The AvailabilityZone to use for the third subnet. Must be supplied but not used unless values for both Public and Private C CIDR IP Ranges are provided.
+    Type: AWS::EC2::AvailabilityZone::Name
+  DHCPOptDomainName:
+    AllowedPattern: '^([a-zA-Z]{2,})\.([a-zA-Z]{2,})$|^$'
+    ConstraintDescription: Please supply a valid domain name. If neither domain name or DNS Servers supplied then AWS defaults will be used.
+    Type: String
+  DHCPOptDNSServers:
+    AllowedPattern: '^(?!^.*,$)((((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))),?)*$|^$'
+    ConstraintDescription: Please supply a valid comma separated list of IP addresses
+    Description: Comma separated list of IP addresses. The value "AmazonProvidedDNS" will be added to this input. If neither domain name or DNS Servers supplied then AWS defaults will be used.
+    Type: String
+  DHCPOptNTPServers:
+    AllowedPattern: '^(?!^.*,$)((((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))),?)*$|^$'
+    ConstraintDescription: Please supply a valid comma separated list of IP addresses
+    Description: Comma separated list of IP addresses. If no values supplied then no NTP servers will be added
+    Type: String     
+  ManagementCIDRIP:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    Description: CIDR IP Block for the management subnet or server (eg 10.0.10.0/24) from which to allow access
+    Type: String
+  ManagementAccessType:
+    Description: Sets whether RDP or SSH should be allowed on the Management Security Group
+    Type: String
+    Default: RDP
+    AllowedValues: 
+      - RDP
+      - SSH
+  PublicSubnetACIDR:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    ConstraintDescription: Please Supply a valid CIDR IP block
+    Description: VPC CIDR IP Block for the Public Subnet A (eg 10.0.1.0/24)
+    Type: String
+  PublicSubnetBCIDR:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    ConstraintDescription: Please Supply a valid CIDR IP block    
+    Description: VPC CIDR IP Block for the Public Subnet B (eg 10.0.2.0/24)
+    Type: String
+  PublicSubnetCCIDR: #Allow null values in case third subnet is not needed
+    AllowedPattern: '^(?!^.*,$)((((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$)|^$'
+    ConstraintDescription: Please Supply a valid CIDR IP block
+    Description: VPC CIDR IP Block for the Public Subnet C (eg 10.0.3.0/24) (if not supplied third AZ will not be used)
+    Type: String    
+  PrivateSubnetACIDR:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    ConstraintDescription: Please Supply a valid CIDR IP block    
+    Description: VPC CIDR IP Block for the Private Subnet A (eg 10.0.4.0/24)
+    Type: String
+  PrivateSubnetBCIDR:
+    AllowedPattern: '^(?!^.*,$)(((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$'
+    ConstraintDescription: Please Supply a valid CIDR IP block    
+    Description: VPC CIDR IP Block for the Private Subnet B (eg 10.0.5.0/24)
+    Type: String
+  PrivateSubnetCCIDR: #Allow null values in case third subnet is not needed
+    AllowedPattern: '^(?!^.*,$)((((([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\/([1-2][0-9]|3[0-2]))*$)|^$'
+    Description: VPC CIDR IP Block for the Private Subnet C (eg 10.0.6.0/24) (if not supplied third AZ will not be used)
+    Type: String    
+Conditions:
+  ThirdPublicSubnet: !Not [!Equals ["",Ref: PublicSubnetCCIDR]]
+  ThirdPrivateSubnet: !Not [!Equals ["",Ref: PrivateSubnetCCIDR]]
+  DomainName: !Not [!Equals ["",Ref: DHCPOptDomainName]]
+  DNSServers: !Not [!Equals ["",Ref: DHCPOptDNSServers]]
+  NTPServers: !Not [!Equals ["",Ref: DHCPOptNTPServers]]
+  CreateThirdAZ: !And [Condition: ThirdPublicSubnet, Condition: ThirdPrivateSubnet]
+  RDPAccess: !Equals [ !Ref ManagementAccessType, RDP ]  
+Resources:
+  DHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: !If [DomainName, !Ref DHCPOptDomainName, !Sub "${AWS::Region}.compute.internal"]
+      DomainNameServers: 
+        !If
+          - DNSServers
+          - !Split [",",!Sub "${DHCPOptDNSServers},AmazonProvidedDNS"]
+          - - "AmazonProvidedDNS"
+      NtpServers:
+        !If 
+          - NTPServers
+          - !Split [",", !Ref DHCPOptNTPServers]
+          - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-DHCPOptionSet"      
+    DependsOn: VPC        
+  DHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId: !Ref VPC
+      DhcpOptionsId: !Ref DHCPOptions
+    DependsOn: DHCPOptions    
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        !Ref CidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value:  !Ref AWS::StackName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value:  !Ref AWS::StackName
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:  !Ref InternetGateway
+      VpcId:  !Ref VPC
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public Route Table"
+      VpcId:  !Ref VPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:  !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone1
+      CidrBlock: !Ref PrivateSubnetACIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private Subnet A"
+      VpcId: !Ref VPC
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone2
+      CidrBlock: !Ref PrivateSubnetBCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value:  !Sub "${AWS::StackName}-Private Subnet B"
+      VpcId: !Ref VPC
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Condition: CreateThirdAZ    
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone3
+      CidrBlock: !Ref PrivateSubnetCCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value:  !Sub "${AWS::StackName}-Private Subnet C"
+      VpcId: !Ref VPC      
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone1
+      CidrBlock: !Ref PublicSubnetACIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public Subnet A"
+      VpcId: !Ref VPC
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone2
+      CidrBlock: !Ref PublicSubnetBCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:  !Sub "${AWS::StackName}-Public Subnet B"
+      VpcId: !Ref VPC
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Condition: CreateThirdAZ    
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone3
+      CidrBlock: !Ref PublicSubnetCCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value:  !Sub "${AWS::StackName}-Public Subnet C"
+      VpcId: !Ref VPC      
+  PublicSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+  PublicSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+  PublicSubnetCRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateThirdAZ
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetC      
+  NATGatewayAEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NATGatewayBEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NATGatewayCEIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateThirdAZ    
+    Properties:
+      Domain: vpc      
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NATGatewayAEIP.AllocationId'
+      SubnetId: !Ref 'PublicSubnetA'
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'NATGatewayBEIP.AllocationId'
+      SubnetId: !Ref 'PublicSubnetB'
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateThirdAZ    
+    Properties:
+      AllocationId: !GetAtt 'NATGatewayCEIP.AllocationId'
+      SubnetId: !Ref 'PublicSubnetB'      
+  PrivateRouteTableA: 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value:  !Sub "${AWS::StackName}-Private Subnet A Route Table"
+  PrivateRouteTableB: 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private Subnet B Route Table"
+  PrivateRouteTableC: 
+    Type: AWS::EC2::RouteTable
+    Condition: CreateThirdAZ      
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private Subnet C Route Table"          
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableA'
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayA
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableB'
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayB
+  PrivateRouteC:
+    Type: AWS::EC2::Route
+    Condition: CreateThirdAZ       
+    Properties:
+      RouteTableId: !Ref 'PrivateRouteTableC'
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayC
+  PrivateSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+  PrivateSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+  PrivateSubnetCRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateThirdAZ
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateSubnetC
+  ManagementSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Default Management Security Group
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - IpProtocol: tcp #RDP or SSH access
+          FromPort: !If [RDPAccess,'3389','22']
+          ToPort: !If [RDPAccess,'3389','22']
+          CidrIp: !Ref ManagementCIDRIP
+        - IpProtocol: icmp
+          FromPort: '8'
+          ToPort: "-1"
+          CidrIp: '0.0.0.0/0'
+Outputs:
+  AvailabilityZone1: 
+    Description: Name of AvailabilityZone 1
+    Value: !Ref 'AvailabilityZone1'
+    Export:
+      Name: !Sub "${AWS::StackName}-AvailabilityZone1"
+  AvailabilityZone2: 
+    Description: Name of AvailabilityZone 2
+    Value: !Ref 'AvailabilityZone2'
+    Export:
+      Name: !Sub "${AWS::StackName}-AvailabilityZone2"
+  AvailabilityZone3: 
+    Description: Name of AvailabilityZone 3
+    Condition: CreateThirdAZ    
+    Value: !Ref 'AvailabilityZone3'
+    Export:
+      Name: !Sub "${AWS::StackName}-AvailabilityZone3"      
+  VPCID: 
+    Description: Logical ID of VPC
+    Value: !Ref 'VPC'
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
+  PrivateSubnetAID: 
+    Description: ID of Private Subnet A
+    Value: !Ref 'PrivateSubnetA'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetAId"
+  PrivateSubnetBID: 
+    Description: ID of Private Subnet B
+    Value: !Ref 'PrivateSubnetB'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetBId"
+  PrivateSubnetCID: 
+    Description: ID of Private Subnet C
+    Condition: CreateThirdAZ     
+    Value: !Ref 'PrivateSubnetC'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetCId"      
+  PublicSubnetAID: 
+    Description: ID of Public Subnet A
+    Value: !Ref 'PublicSubnetA'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetAId"
+  PublicSubnetBID: 
+    Description: ID of Public Subnet B
+    Value: !Ref 'PublicSubnetB'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetBId"
+  PublicSubnetCID: 
+    Description: ID of Public Subnet C
+    Condition: CreateThirdAZ     
+    Value: !Ref 'PublicSubnetC'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetCId"      
+  PrivateSubnetACIDRIp: 
+    Description: CIDR IP Range of Private Subnet A
+    Value: !Ref 'PrivateSubnetACIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetACIDRIp"
+  PrivateSubnetBCIDRIp: 
+    Description: CIDR IP Range of Private Subnet B
+    Value: !Ref 'PrivateSubnetBCIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetBCIDRIp"
+  PrivateSubnetCCIDRIp: 
+    Description: CIDR IP Range of Private Subnet C
+    Condition: CreateThirdAZ     
+    Value: !Ref 'PrivateSubnetCCIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetCCIDRIp"      
+  PublicSubnetACIDRIp: 
+    Description: CIDR IP Range of Public Subnet A
+    Value: !Ref 'PublicSubnetACIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetACIDRIp"
+  PublicSubnetBCIDRIp: 
+    Description: CIDR IP Range of Public Subnet B
+    Value: !Ref 'PublicSubnetBCIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetBCIDRIp"
+  PublicSubnetCCIDRIp: 
+    Description: CIDR IP Range of Public Subnet C
+    Condition: CreateThirdAZ     
+    Value: !Ref 'PublicSubnetCCIDR'
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetCCIDRIp"      
+  ManagementSecurityGroupID: 
+    Description: ID of the Management Security Group (used for controlling access)
+    Value: !Ref 'ManagementSecurityGroup'
+    Export:
+      Name: !Sub "${AWS::StackName}-ManagementSecurityGroupId"
+  NatGatewayAEIP: 
+    Description: Elastic IP of NAT Gateway A
+    Value: !Ref NATGatewayAEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayAEIP"
+  NatGatewayBEIP: 
+    Description: Elastic IP of NAT Gateway B
+    Value: !Ref NATGatewayBEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayBEIP"
+  NatGatewayCEIP: 
+    Description: Elastic IP of NAT Gateway C
+    Condition: CreateThirdAZ     
+    Value: !Ref NATGatewayCEIP
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGatewayCEIP"
+  DHCPOptionSetID: 
+    Description: ID of the DHCP Option Group Set  
+    Value: !Ref DHCPOptions
+    Export:
+      Name: !Sub "${AWS::StackName}-DHCPOptionSetID"
+  DHCPOptionSetDomainName: 
+    Description: The domain name configured in the DHCP Option Set
+    Condition: DomainName    
+    Value: !Ref DHCPOptDomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-DHCPOptionSetDomainName"       
+  DHCPOptionSetDNSServerIPs: 
+    Description: IP addresses of the DNS Servers
+    Condition: DNSServers     
+    Value: !Ref DHCPOptDNSServers
+    Export:
+      Name: !Sub "${AWS::StackName}-DHCPOptionSetDNSServerIPs"
+  DHCPOptionSetNTPServerIPs: 
+    Description: IP addresses of the NTP Servers
+    Condition: NTPServers     
+    Value: !Ref DHCPOptDNSServers
+    Export:
+      Name: !Sub "${AWS::StackName}-DHCPOptionSetNTPServerIPs"             
+  ThirdAZDeployed: 
+    Description: Flag to set if a third AZ has been deployed
+    Value: !If [CreateThirdAZ,'True','False']
+    Export:
+      Name: !Sub "${AWS::StackName}-ThirdAZDeployed"
