@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Test AMI Lookup Lambda Function'
+Parameters:
+  AMILookupStackName:
+    Description: The name of the stack used to deploy AMI Lookup function
+    Type: String   
+  InstanceType:
+    Description: EC2 Instance Type
+    Default: t2.micro
+    Type: String
+  WindowsVersion:
+    Description: Windows Version
+    Default: Windows Server 2012 R2 English 64-bit
+    Type: String
+    AllowedValues:
+      - Windows Server 2008 SP2 English 32-bit
+      - Windows Server 2008 SP2 English 64-bit
+      - Windows Server 2008 R2 English 64-bit
+      - Windows Server 2012 RTM English 64-bit
+      - Windows Server 2012 R2 English 64-bit
+Resources:
+  AMIInfo:
+    Type: Custom::AMIInfo
+    Properties:
+      ServiceToken:
+        Fn::ImportValue: !Sub "${AMILookupStackName}-AMIInfoFunctionArn" 
+      Region: !Ref "AWS::Region"
+      OSName: !Ref WindowsVersion
+  AMILookupTestInstance:
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      InstanceType: !Ref InstanceType
+      ImageId: !GetAtt AMIInfo.Id
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}"
+Outputs:
+  AMILookupTestInstanceID:
+    Description: The ID of the EC2 instance launched by this stack
+    Value: !Ref AMILookupTestInstance  
+  AMIID:
+    Description: AMI ID used to launch the EC2 instance
+    Value: !GetAtt AMIInfo.Id  
+  
