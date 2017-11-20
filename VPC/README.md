@@ -1,5 +1,5 @@
 # VPC
-Cloudformation templates to help with deploying EC2 resources in AWS
+Cloudformation templates to help with deploying VPC resources in AWS
 
 ## VPCStack.yml
 This template deploys a VPC with public and private subnets with Internet and NAT gateways. Additionally a security group for management access is created along with a DHCP Option Set for the VPC.
