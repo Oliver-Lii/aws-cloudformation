@@ -63,5 +63,30 @@ SampleInstance:
     ImageId: !GetAtt AMIInfo.Id
 ```
 
+## TestAMILookup.yml
+
+TestAMILookup.yml - This template deploys a EC2 instance using the AMI Lookup function created by the AMILookupStack.yml template.
+
+### Prerequisites
+
+1. A Cloudformation stack created using the AMILookupStack.yml template in the same region in which this template will be deployed
+
+### Parameters
+
+| Parameter          | Default                               | Restrictions                                                         | Required? | Description                                                                             |
+|--------------------|---------------------------------------|----------------------------------------------------------------------|-----------|-----------------------------------------------------------------------------------------|
+| AMILookupStackName | None                                  | String                                                               | Yes       | Name of the Cloudformation stack which was used to deploy the AMILookup Function        |
+| InstanceType       | t2.micro                              | String                                                               | No        | The EC2 Instance Type                                                                   |
+| WindowsVersion     | Windows Server 2012 R2 English 64-bit | A Windows Version supported by the default Amazon AMI Lookup package | No        | The Windows Version is defined in the AMI Lookup Lambda function and maps to a AMI name |
+
+### Outputs
+
+None of the following outputs are exported from the CloudFormation template
+
+| Output Name             | Always Output? | Description                                       |
+|-------------------------|----------------|---------------------------------------------------|
+| AMILookupTestInstanceID | Yes            | The ID of the EC2 instance launched by this stack |
+| AMIID                   | Yes            | AMI ID used to launch the EC2 instance            |
+
 # Authors
 - Oliver Li
